@@ -1,0 +1,39 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "p_rgName": {
+      "value": "soc-poc-sentinel"
+    },
+    "p_adminUsername": {
+      "value": "clem"
+    },
+    "p_adminPassword": {
+      "value": "ClemClem123*"
+    },
+    "p_publicIpName": {
+      "value": "poc-windows-vm-pip"
+    },
+    "p_publicIPAllocationMethod": {
+      "value": "Dynamic"
+    },
+    "p_publicIpSku": {
+      "value": "Basic"
+    },
+    "p_OSVersion": {
+      "value": "2019-Datacenter"
+    },
+    "p_vmSize": {
+      "value": "Standard_D2_v3"
+    },
+    "p_location": {
+      "value": "westeurope"
+    },
+    "p_vmName": {
+      "value": "poc-windows-vm"
+    },
+    "p_workspaceName": {
+        "value": "poc-sentinel"
+    }
+  }
+}

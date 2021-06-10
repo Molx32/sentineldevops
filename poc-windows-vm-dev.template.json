@@ -1,0 +1,394 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2018-05-01/subscriptionDeploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "p_rgName": {
+            "type": "string"
+        },
+        "p_adminUsername": {
+            "type": "string",
+            "metadata": {
+                "description": "Username for the Virtual Machine."
+            }
+        },
+        "p_adminPassword": {
+            "type": "securestring",
+            "minLength": 12,
+            "metadata": {
+                "description": "Password for the Virtual Machine."
+            }
+        },
+        "p_publicIpName": {
+            "type": "string",
+            "defaultValue": "poc-windows-vm-pip",
+            "metadata": {
+                "description": "Name for the Public IP used to access the Virtual Machine."
+            }
+        },
+        "p_publicIPAllocationMethod": {
+            "type": "string",
+            "defaultValue": "Dynamic",
+            "allowedValues": [
+                "Dynamic",
+                "Static"
+            ],
+            "metadata": {
+                "description": "Allocation method for the Public IP used to access the Virtual Machine."
+            }
+        },
+        "p_publicIpSku": {
+            "type": "string",
+            "defaultValue": "Basic",
+            "allowedValues": [
+                "Basic",
+                "Standard"
+            ],
+            "metadata": {
+                "description": "SKU for the Public IP used to access the Virtual Machine."
+            }
+        },
+        "p_OSVersion": {
+            "type": "string",
+            "defaultValue": "2019-Datacenter",
+            "allowedValues": [
+                "2008-R2-SP1",
+                "2012-Datacenter",
+                "2012-R2-Datacenter",
+                "2016-Nano-Server",
+                "2016-Datacenter-with-Containers",
+                "2016-Datacenter",
+                "2019-Datacenter",
+                "2019-Datacenter-Core",
+                "2019-Datacenter-Core-smalldisk",
+                "2019-Datacenter-Core-with-Containers",
+                "2019-Datacenter-Core-with-Containers-smalldisk",
+                "2019-Datacenter-smalldisk",
+                "2019-Datacenter-with-Containers",
+                "2019-Datacenter-with-Containers-smalldisk"
+            ],
+            "metadata": {
+                "description": "The Windows version for the VM. This will pick a fully patched image of this given Windows version."
+            }
+        },
+        "p_vmSize": {
+            "type": "string",
+            "defaultValue": "Standard_D2_v3",
+            "metadata": {
+                "description": "Size of the virtual machine."
+            }
+        },
+        "p_location": {
+            "type": "string",
+            "defaultValue": "[resourceGroup().location]",
+            "metadata": {
+                "description": "Location for all resources."
+            }
+        },
+        "p_vmName": {
+            "type": "string",
+            "defaultValue": "poc-windows-vm",
+            "metadata": {
+                "description": "Name of the virtual machine."
+            }
+        },
+        "p_utcValue": {
+            "type": "string",
+            "defaultValue": "[utcNow()]",
+            "metadata": {
+                "description": "Returns the current (UTC) datetime value in the specified format. If no format is provided, the ISO 8601 (yyyyMMddTHHmmssZ) format is used"
+            }
+        },
+        "p_workspaceName": {
+            "type": "string",
+            "metadata": {
+                "description": "Name for the Log Analytics workspace used to aggregate data"
+            }
+        },
+        "p_pricingTier": {
+            "type": "string",
+            "allowedValues": [
+                "PerGB2018",
+                "Free",
+                "Standalone",
+                "PerNode",
+                "Standard",
+                "Premium"
+            ],
+            "defaultValue": "PerGB2018",
+            "metadata": {
+                "description": "Pricing tier: pergb2018 or legacy tiers (Free, Standalone, PerNode, Standard or Premium) which are not available to all customers."
+            }
+        },
+        "p_dataRetention": {
+            "type": "int",
+            "defaultValue": 30,
+            "minValue": 7,
+            "maxValue": 730,
+            "metadata": {
+                "description": "Number of days of retention. Workspaces in the legacy Free pricing tier can only have 7 days."
+            }
+        },
+        "p_immediatePurgeDataOn30Days": {
+            "type": "bool",
+            "defaultValue": true,
+            "metadata": {
+                "description": "If set to true when changing retention to 30 days, older data will be immediately deleted. Use this with extreme caution. This only applies when retention is being set to 30 days."
+            }
+        }
+    },
+
+
+
+
+    "variables": {
+        "rgName":"[uniquestring(parameters('p_rgName'), parameters('p_utcValue'))]",
+        "storageAccountName": "[concat('bootdiags', uniquestring(parameters('p_rgName')))]",
+        "uniqueWorkspace": "[concat(parameters('p_workspaceName'), uniquestring(parameters('p_rgName'), parameters('p_utcValue')))]",
+        "nicName": "poc-windows-vm-nic",
+        "addressPrefix": "10.0.0.0/16",
+        "subnetName": "poc-vm-subnet",
+        "subnetPrefix": "10.0.0.0/24",
+        "virtualNetworkName": "poc-vm-vnet",
+        "subnetRef": "[resourceId('Microsoft.Network/virtualNetworks/subnets', variables('virtualNetworkName'), variables('subnetName'))]",
+        "networkSecurityGroupName": "poc-windows-vm-nsg"
+    },
+
+
+
+
+    "resources": [
+        {
+            "type": "Microsoft.Resources/resourceGroups",
+            "apiVersion": "2020-10-01",
+            "name": "[variables('rgName')]",
+            "location": "[parameters('p_location')]",
+            "properties": {}
+        },
+
+        {
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2020-10-01",
+            "name": "storageDeployment",
+            "resourceGroup": "[variables('rgName')]",
+            "dependsOn": [
+                "[variables('rgName')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "template": {
+                    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+                    "contentVersion": "1.0.0.0",
+                    "parameters": {},
+                    "variables": {},
+                    "resources": [
+                        {
+                            "apiVersion": "2015-11-01-preview",
+                            "type": "Microsoft.OperationalInsights/workspaces",
+                            "name": "[variables('uniqueWorkspace')]",
+                            "location": "[parameters('p_location')]",
+                            "properties": {
+                                "retentionInDays": "[parameters('p_dataRetention')]",
+                                "features": {
+                                    "immediatePurgeDataOn30Days": "[parameters('p_immediatePurgeDataOn30Days')]"
+                                },
+                                "sku": {
+                                    "name": "[parameters('p_pricingTier')]"
+                                }
+                            }
+                        },
+                        {
+                            "name": "[concat('SecurityInsights','(', variables('uniqueWorkspace'),')')]",
+                            "type": "Microsoft.OperationsManagement/solutions",
+                            "apiVersion": "2015-11-01-preview",
+                            "location": "[resourceGroup().location]",
+                            "dependsOn": [
+                                "[resourceId('Microsoft.OperationalInsights/workspaces/', variables('uniqueWorkspace'))]"
+                            ],
+                            "properties": {
+                                "workspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('uniqueWorkspace'))]"
+                            },
+                            "plan": {
+                                "name": "[concat('SecurityInsights','(', variables('uniqueWorkspace'),')')]",
+                                "product": "OMSGallery/SecurityInsights",
+                                "publisher": "Microsoft",
+                                "promotionCode": ""
+                            }
+                        },
+                        {
+                            "type": "Microsoft.Storage/storageAccounts",
+                            "apiVersion": "2019-06-01",
+                            "name": "[variables('storageAccountName')]",
+                            "location": "[parameters('p_location')]",
+                            "dependsOn": [
+                                "[resourceId('Microsoft.Resources/resourceGroups/', variables('p_rgName'))]"
+                            ],
+                            "sku": {
+                                "name": "Standard_LRS"
+                            },
+                            "kind": "Storage",
+                            "properties": {}
+                        },
+                        {
+                            "type": "Microsoft.Network/publicIPAddresses",
+                            "apiVersion": "2020-06-01",
+                            "name": "[parameters('p_publicIPName')]",
+                            "location": "[parameters('p_location')]",
+                            "sku": {
+                                "name": "[parameters('p_publicIpSku')]"
+                            },
+                            "properties": {
+                                "publicIPAllocationMethod": "[parameters('p_publicIPAllocationMethod')]",
+                                "dnsSettings": {
+                                    "domainNameLabel": "[toLower(uniqueString(parameters('p_vmName')))]"
+                                }
+                            }
+                        },
+                        {
+                            "type": "Microsoft.Network/networkSecurityGroups",
+                            "apiVersion": "2020-06-01",
+                            "name": "[variables('networkSecurityGroupName')]",
+                            "location": "[parameters('p_location')]",
+                            "properties": {
+                                "securityRules": [{
+                                    "name": "default-allow-3389",
+                                    "properties": {
+                                        "priority": 1000,
+                                        "access": "Allow",
+                                        "direction": "Inbound",
+                                        "destinationPortRange": "3389",
+                                        "protocol": "Tcp",
+                                        "sourcePortRange": "*",
+                                        "sourceAddressPrefix": "*",
+                                        "destinationAddressPrefix": "*"
+                                    }
+                                }]
+                            }
+                        },
+                        {
+                            "type": "Microsoft.Network/virtualNetworks",
+                            "apiVersion": "2020-06-01",
+                            "name": "[variables('virtualNetworkName')]",
+                            "location": "[parameters('p_location')]",
+                            "dependsOn": [
+                                "[resourceId('Microsoft.Network/networkSecurityGroups', variables('networkSecurityGroupName'))]"
+                            ],
+                            "properties": {
+                                "addressSpace": {
+                                    "addressPrefixes": [
+                                        "[variables('addressPrefix')]"
+                                    ]
+                                },
+                                "subnets": [{
+                                    "name": "[variables('subnetName')]",
+                                    "properties": {
+                                        "addressPrefix": "[variables('subnetPrefix')]",
+                                        "networkSecurityGroup": {
+                                            "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('networkSecurityGroupName'))]"
+                                        }
+                                    }
+                                }]
+                            }
+                        },
+                        {
+                            "type": "Microsoft.Network/networkInterfaces",
+                            "apiVersion": "2020-06-01",
+                            "name": "[variables('nicName')]",
+                            "location": "[parameters('p_location')]",
+                            "dependsOn": [
+                                "[resourceId('Microsoft.Network/publicIPAddresses', parameters('p_publicIPName'))]",
+                                "[resourceId('Microsoft.Network/virtualNetworks', variables('virtualNetworkName'))]"
+                            ],
+                            "properties": {
+                                "ipConfigurations": [{
+                                    "name": "ipconfig1",
+                                    "properties": {
+                                        "privateIPAllocationMethod": "Dynamic",
+                                        "publicIPAddress": {
+                                            "id": "[resourceId('Microsoft.Network/publicIPAddresses', parameters('p_publicIPName'))]"
+                                        },
+                                        "subnet": {
+                                            "id": "[variables('subnetRef')]"
+                                        }
+                                    }
+                                }]
+                            }
+                        },
+                        {
+                            "type": "Microsoft.Compute/virtualMachines",
+                            "apiVersion": "2020-06-01",
+                            "name": "[parameters('p_vmName')]",
+                            "location": "[parameters('p_location')]",
+                            "dependsOn": [
+                                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageAccountName'))]",
+                                "[resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))]"
+                            ],
+                            "properties": {
+                                "hardwareProfile": {
+                                    "vmSize": "[parameters('p_vmSize')]"
+                                },
+                                "osProfile": {
+                                    "computerName": "[parameters('p_vmName')]",
+                                    "adminUsername": "[parameters('p_adminUsername')]",
+                                    "adminPassword": "[parameters('p_adminPassword')]"
+                                },
+                                "storageProfile": {
+                                    "imageReference": {
+                                        "publisher": "MicrosoftWindowsServer",
+                                        "offer": "WindowsServer",
+                                        "sku": "[parameters('p_OSVersion')]",
+                                        "version": "latest"
+                                    },
+                                    "osDisk": {
+                                        "createOption": "FromImage",
+                                        "managedDisk": {
+                                            "storageAccountType": "StandardSSD_LRS"
+                                        }
+                                    },
+                                    "dataDisks": [{
+                                        "diskSizeGB": 1023,
+                                        "lun": 0,
+                                        "createOption": "Empty"
+                                    }]
+                                },
+                                "networkProfile": {
+                                    "networkInterfaces": [{
+                                        "id": "[resourceId('Microsoft.Network/networkInterfaces', variables('nicName'))]"
+                                    }]
+                                },
+                                "diagnosticsProfile": {
+                                    "bootDiagnostics": {
+                                        "enabled": true,
+                                        "storageUri": "[reference(concat('/subscriptions/', subscription().subscriptionId, '/resourceGroups/', variables('p_rgName'), '/providers/', 'Microsoft.Storage/storageAccounts/', variables('storageAccountName')), '2019-06-01', 'Full').primaryEndpoints.blob]"
+
+                                    }
+                                }
+                            },
+                            "resources": [{
+                                "type": "extensions",
+                                "name": "OMSExtension",
+                                "apiVersion": "2020-12-01",
+                                "location": "[parameters('p_location')]",
+                                "dependsOn": [
+                                    "[concat('Microsoft.Compute/virtualMachines/', parameters('p_vmName'))]"
+                                ],
+                                "properties": {
+                                    "publisher": "Microsoft.EnterpriseCloud.Monitoring",
+                                    "type": "MicrosoftMonitoringAgent",
+                                    "typeHandlerVersion": "1.0",
+                                    "autoUpgradeMinorVersion": true,
+                                    "settings": {
+                                        "workspaceId": "[reference(resourceId('Microsoft.OperationalInsights/workspaces/', variables('uniqueWorkspace')), '2015-11-01-preview').customerId]"
+                                    },
+                                    "protectedSettings": {
+                                        "workspaceKey": "[listKeys(resourceId('Microsoft.OperationalInsights/workspaces/', variables('uniqueWorkspace')), '2015-11-01-preview').primarySharedKey]"
+                                    }
+                                }
+                            }]
+                        },
+                    ]
+                }
+            }
+        }
+    ],
+    "outputs": {}
+}
